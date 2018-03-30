@@ -3,7 +3,6 @@ SRC="null"
 DST="null"
 INC="0"
 TMP_DIR="/mnt/backupdir/"
-LOG_FILE="$SRC/`date +%Y.%m.%d`.archive.lo"
 OPT="-o ";
 
 while [ -n "$1" ]; do
@@ -12,21 +11,31 @@ while [ -n "$1" ]; do
 	    shift ;;
 	-d) DST="$2"
 	    shift ;;
-	-i) INC="1"; shift;;
-	-o) OPT=$OPT$2; shift;shift;;
+	-i) INC="1";; 
+	-o) OPT="$OPT$2";shift;;
     esac
+    shift;
 done
+echo "src = $SRC; 
+dst=$DST;
+inc=$INC; 
+otions=$OPT" 
 
-ARCH_NAME="$SRC/`date +%Y.%m.%d`.archive.";
+LOG_FILE="$SRC/`date +%Y.%m.%d`.archive.log"
+
+
+echo "creating log file $LOG_FILE"; echo;echo;
+touch "$SRC/`date +%Y.%m.%d`.archive.log"
 
 if [ ${DST:0:2} = '//' ]; then #Если папка назначения начинается с "//" то пытаемся смонтировать сетевую папку
-    locate cifs; # Проверка на наличие пакета 
+    echo "destination folder on remote server";echo;echo;
+    locate cifs > /dev/null; # Проверка на наличие пакета
+
+    
     if [ $? -ne 0 ]; then # Если пакета нет пишем лог и выходим с ошибкой 101;
 	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: cifs_utils not installed   Exit with 101 code" >> $LOG_FILE;
 	exit 101;
     fi
-
-
 
     if [ ` test -d $TMP_DIR; echo $?` -ne 0 ]; then # Проверяем есть ли папка для монтирования, если нет создаем;
     
@@ -34,22 +43,23 @@ if [ ${DST:0:2} = '//' ]; then #Если папка назначения нач�
     fi
 
     SRV=`echo $DST | cut -d / -f 3`;
-    ping $SVR -c1
+    echo "$SRV";echo;echo;
+    ping $SRV -c 1 > /dev/null;
 
     if [ $? -ne 0 ]; then # Проверяем доступноть сервера, если не доступен пишем лог и выходим с ошибкой 102;
 	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: host $SRV not available   Exit with 102 code" >> $LOG_FILE;
 	exit 102;
     fi
 
-    RES=`mouunt.cifs $TMP_DIR $DST $OPT; $?`;
+    RES=`mount.cifs $DST $TMP_DIR $OPT; echo $?`;
     if [ $RES -ne 0 ]
     then
 	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: mounting remote SMBfs on $SRV unsuccessfull   Exit with 103 code" >> $LOG_FILE;
 	exit 103;
     fi 
-    DST =$TMP_DIR;
+    DST=$TMP_DIR;
 fi
-
+ARCH_NAME="$DST`date +%Y.%m.%d`.archive";
 
 if [ ! -d "$SRC" ]
 then
@@ -58,8 +68,14 @@ then
 fi
 if [ $INC -eq 1 ]
 then
-    CMD="tar -cgLzf $ARCH_NAME $SRC";
+    CMD="tar -czg $ARCH_NAME.snar -f $ARCH_NAME.inc.gz $SRC";
 else
-    CMD="tar -cLzf $ARCH_NAME $SRCfull.gz";
+    CMD="tar czf $ARCH_NAME.full.gz $SRC";
 fi
-echo $CMD
+$CMD;
+wait;
+
+if [ "$DST" = "$TMP_DIR" ]
+then
+    umount $TMP_DIR;
+fi
