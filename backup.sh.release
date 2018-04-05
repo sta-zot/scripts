@@ -4,6 +4,22 @@ DST="null"
 INC="0"
 TMP_DIR="/mnt/backupdir/"
 OPT="-o ";
+STORE_TIME=60; #Время хранения резервной копии в днях
+if [ ! -n "$1" ]
+then
+    echo "Использование скрипта:";
+    echo "данный скрипт не производит тщательной проверки"
+    echo "правильности ввода пользователя будте внимательны";
+    echo "Все ошибки записываются в файл лога в папке";
+    echo "предназначенной для резервирования";
+    echo "формат файла дата.архивируемая папка.log";
+    echo "-d путь к папке для хранения архива (поддерживает архивирование по протаколу smb убедитесь что установлен пакет cifs-utils для debian)";
+    echo "Для копирования по протоколу smb необходимо дополнительно указать ключ -o";
+    echo "-s путь к архивируемой папке без последнего слеша";
+    echo "-i при наличии этого ключа будет создоваться инкрементная копия для её создания необходим файл метаданых в архивируемой папке";
+    echo "без него будет создана полная копия";
+    echo "-o передача данных для подключения к удаленному серверу. Формат: -o user='login',pass='password";
+fi
 
 while [ -n "$1" ]; do
     case "$1" in
@@ -16,19 +32,19 @@ while [ -n "$1" ]; do
     esac
     shift;
 done
-echo "src = $SRC; 
-dst=$DST;
-inc=$INC; 
-otions=$OPT" 
+#echo "src = $SRC; 
+#dst=$DST;
+#inc=$INC; 
+#otions=$OPT" 
 
 LOG_FILE="$SRC/`date +%Y.%m.%d`.archive.log"
 
 
-echo "creating log file $LOG_FILE"; echo;echo;
+#echo "creating log file $LOG_FILE"; echo;echo;
 touch "$SRC/`date +%Y.%m.%d`.archive.log"
 
 if [ ${DST:0:2} = '//' ]; then #Если папка назначения начинается с "//" то пытаемся смонтировать сетевую папку
-    echo "destination folder on remote server";echo;echo;
+#    echo "destination folder on remote server";echo;echo;
     locate cifs > /dev/null; # Проверка на наличие пакета
 
     
@@ -43,7 +59,7 @@ if [ ${DST:0:2} = '//' ]; then #Если папка назначения нач�
     fi
 
     SRV=`echo $DST | cut -d / -f 3`;
-    echo "$SRV";echo;echo;
+#   echo "$SRV";echo;echo;
     ping $SRV -c 1 > /dev/null;
 
     if [ $? -ne 0 ]; then # Проверяем доступноть сервера, если не доступен пишем лог и выходим с ошибкой 102;
@@ -68,19 +84,21 @@ then
 fi
 if [ $INC -eq 1 ]
 then
-    CMD="tar -czg $SRC/archiv.snar -f $ARCH_NAME.inc.gz $SRC";
+    CMD="tar -czg $SRC/archive.snar -f $ARCH_NAME.inc.gz $SRC --backup=numbered";
 else
-    CMD="tar czf $ARCH_NAME.full.gz $SRC";
-    if [ -f "$SRC/archiv.snar" ]
+    if [ -f "$SRC/archive.snar" ]
     then
-	rm -f "$SRC/archiv.snar";
+	rm -f "$SRC/archive.snar";
     fi
-    
+    CMD="tar czf $ARCH_NAME.full.gz $SRC -g $SRC/archive.snar ";
 fi
 $CMD;
 wait;
+find "$TMP_DIR" -mtime +$STORE_TIME -iname "*full.gz" -exec rm -f {} \;
+find "$TMP_DIR" -mtime +$((STORE_TIME-7)) -iname "*inc.gz" -exec rm -f {} \;
 
 if [ "$DST" = "$TMP_DIR" ]
 then
     umount $TMP_DIR;
 fi
+#echo "done";
