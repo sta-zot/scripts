@@ -38,19 +38,18 @@ done
 #inc=$INC; 
 #otions=$OPT" 
 
-LOG_FILE="$SRC/`date +%Y.%m.%d`.archive.log"
-
-
-#echo "creating log file $LOG_FILE"; echo;echo;
-touch "$SRC/`date +%Y.%m.%d`.archive.log"
+LOG_FILE="$(echo $SRC | sed -e 's/^\(.*\)\/$/\1/')/`date +%Y.%m.%d`.$(basename $SRC).log"
+#echo $LOG_FILE
+###################################################################################################################
+#"creating log file $LOG_FILE"; echo;echo;
+touch $LOG_FILE
 
 if [ ${DST:0:2} = '//' ]; then #Если папка назначения начинается с "//" то пытаемся смонтировать сетевую папку
-#    echo "destination folder on remote server";echo;echo;
     locate cifs > /dev/null; # Проверка на наличие пакета
-
-    
+        
     if [ $? -ne 0 ]; then # Если пакета нет пишем лог и выходим с ошибкой 101;
-	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: cifs_utils not installed   Exit with 101 code" >> $LOG_FILE;
+	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: cifs_utils not installed   Exit with 101 code \n 
+		   if you get code after install packeges update locate's database" >> $LOG_FILE;
 	exit 101;
     fi
 
@@ -60,46 +59,50 @@ if [ ${DST:0:2} = '//' ]; then #Если папка назначения нач�
     fi
 
     SRV=`echo $DST | cut -d / -f 3`;
-#   echo "$SRV";echo;echo;
     ping $SRV -c 1 > /dev/null;
 
     if [ $? -ne 0 ]; then # Проверяем доступноть сервера, если не доступен пишем лог и выходим с ошибкой 102;
 	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: host $SRV not available   Exit with 102 code" >> $LOG_FILE;
 	exit 102;
     fi
-
-    RES=`mount.cifs $DST $TMP_DIR $OPT; echo $?`;
+    #MOUNT="mount.cifs $DST $TMP_DIR $OPT; echo $?";
+    mount.cifs $DST $TMP_DIR $OPT
+    RES=$?;
+    echo $RES
     if [ $RES -ne 0 ]
     then
-	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: mounting remote SMBfs on $SRV unsuccessfull   Exit with 103 code" >> $LOG_FILE;
+	echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: mounting remote SMB FS on $SRV unsuccessfull(error code $RES) \n  Exit with 103 code" >> $LOG_FILE;
 	exit 103;
     fi 
     DST=$TMP_DIR;
 fi
-ARCH_NAME="$DST`date +%Y.%m.%d`.archive";
-
+ARCH_NAME="$DST/`date +%Y.%m.%d`.$(basename $SRC).tar.gz";
+echo $ARCH_NAME
 if [ ! -d "$SRC" ]
 then
     echo "`date +"%Y.%m.%d  %H:%M:%S"` ERROR: Source folder not exist   Exit with 104 code" >> $LOG_FILE;
     exit 104
 fi
+export LOG_FILE;
 if [ $INC -eq 1 ]
 then
-    CMD="tar -czg $SRC/archive.snar -f $ARCH_NAME.inc.gz $SRC --backup=numbered";
+    CMD="tar -czv -f $ARCH_NAME.inc.gz --backup=numbered -g $SRC/archive.snar --exclude '*.log'  --exclude '*.snar' $SRC";
 else
     if [ -f "$SRC/archive.snar" ]
     then
 	rm -f "$SRC/archive.snar";
     fi
-    CMD="tar czf $ARCH_NAME.full.gz $SRC -g $SRC/archive.snar ";
+    CMD="tar czfv $ARCH_NAME.full.gz -g $SRC/archive.snar --exclude '*.log' --exclude '*.snar'  $SRC ";
 fi
-$CMD;
+$CMD >> $LOG_FILE;
 wait;
 find "$TMP_DIR" -mtime +$STORE_TIME -iname "*full.gz" -exec rm -f {} \;
 find "$TMP_DIR" -mtime +$((STORE_TIME-7)) -iname "*inc.gz" -exec rm -f {} \;
+find "$SRC" -mtime +$((STORE_TIME-7)) -iname "*.log" -exec rm -f {} \;
 
 if [ "$DST" = "$TMP_DIR" ]
 then
     umount $TMP_DIR;
 fi
-#echo "done";
+echo "done" >> $LOG_FILE;
+
